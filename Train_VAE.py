@@ -5,6 +5,11 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import numpy as np
 import torchvision.models as models
+import argparse
+
+argparser = argparse.ArgumentParser()
+argparser.add_argument('--latent_dim', type=int, default=20, help='Dimension of the latent space.')
+args = argparser.parse_args()
 
 # Define the VAE model with ResNet backbone
 class VAE(nn.Module):
@@ -16,14 +21,14 @@ class VAE(nn.Module):
         self.encoder_backbone = nn.Sequential(*list(resnet.children())[:-2])  # Remove the last two layers (avgpool and fc)
 
         # Additional layers for encoder
-        self.encoder_mean = nn.Linear(512, latent_dim)
-        self.encoder_logvar = nn.Linear(512, latent_dim)
+        self.encoder_mean = nn.Linear(2048, latent_dim)
+        self.encoder_logvar = nn.Linear(2048, latent_dim)
 
         # Decoder
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, 512),
             nn.ReLU(True),
-            nn.Linear(512, 3 * 64 * 64),  # Assuming input image size is 64x64 and 3 channels (RGB)
+            nn.Linear(512, 3 * 48 * 48),
             nn.Sigmoid()  # To ensure values are between 0 and 1
         )
 
@@ -46,7 +51,8 @@ class VAE(nn.Module):
 
         # Decode
         x_recon = self.decoder(z)
-
+        x_recon = x_recon.view(x_recon.size(0), 3, 48, 48)
+    
         return x_recon, mu, logvar
 
 
@@ -74,15 +80,15 @@ transform = transforms.Compose([
 batch_size = 64
 learning_rate = 1e-3
 num_epochs = 10
-latent_dim = 20
+latent_dim = args.latent_dim
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Initialize your VAE model
-vae = VAE(input_shape=(3, 64, 64), latent_dim=latent_dim).to(device)
+vae = VAE(latent_dim=latent_dim).to(device)
 
 
 # Assuming your numpy array is named 'numpy_data'
-numpy_data = np.load('path_to_your_numpy_array.npy')  # Replace 'path_to_your_numpy_array.npy' with the path to your numpy array
+numpy_data = np.load('observations.npy')  # Replace 'path_to_your_numpy_array.npy' with the path to your numpy array
 dataset = NumpyArrayDataset(numpy_data, transform=transform)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -117,4 +123,4 @@ for epoch in range(num_epochs):
           epoch, total_loss / len(dataloader.dataset)))
 
 # Save the trained model
-torch.save(vae.state_dict(), 'vae.pth')
+torch.save(vae.state_dict(), f'vae_{args.latent_dim}.pth')
