@@ -7,9 +7,24 @@ import numpy as np
 import torchvision.models as models
 import argparse
 
+
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--latent_dim', type=int, default=20, help='Dimension of the latent space.')
+argparser.add_argument('--beta', type=float, default=1, help='Beta value for the beta-VAE loss.')
+argparser.add_argument('--seed', type=int, default=2, help='Random seed.')
 args = argparser.parse_args()
+
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+
+# Set random seed for GPU
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+# Additional seeds for certain operations
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 # Define the VAE model with ResNet backbone
 class VAE(nn.Module):
@@ -23,6 +38,9 @@ class VAE(nn.Module):
         # Additional layers for encoder
         self.encoder_mean = nn.Linear(2048, latent_dim)
         self.encoder_logvar = nn.Linear(2048, latent_dim)
+
+        self.min_val = float('inf')
+        self.max_val = float('-inf')
 
         # Decoder
         self.decoder = nn.Sequential(
@@ -48,6 +66,8 @@ class VAE(nn.Module):
 
         # Reparameterize
         z = self.reparameterize(mu, logvar)
+        self.min_val = min(self.min_val, torch.min(z).item())
+        self.max_val = max(self.max_val, torch.max(z).item())
 
         # Decode
         x_recon = self.decoder(z)
@@ -55,6 +75,8 @@ class VAE(nn.Module):
     
         return x_recon, mu, logvar
 
+    def get_min_max(self):
+        return self.min_val, self.max_val
 
 # Define your custom dataset
 class NumpyArrayDataset(Dataset):
@@ -96,7 +118,7 @@ dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 def loss_function(recon_x, x, mu, logvar):
     BCE = nn.BCELoss(reduction='sum')(recon_x, x)
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return BCE + KLD
+    return BCE + args.beta * KLD
 
 # Define optimizer
 optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
@@ -114,13 +136,15 @@ for epoch in range(num_epochs):
         total_loss += loss.item()
         optimizer.step()
 
-        if batch_idx % 100 == 0:
+        if batch_idx % 100 == 0 and False:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(dataloader.dataset),
                 100. * batch_idx / len(dataloader), loss.item() / len(data)))
 
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
-          epoch, total_loss / len(dataloader.dataset)))
+    #print('====> Epoch: {} Average loss: {:.4f}'.format(
+    #      epoch, total_loss / len(dataloader.dataset)))
+print('Min value in latent space:', vae.get_min_max()[0])
+print('Max value in latent space:', vae.get_min_max()[1])
 
 # Save the trained model
-torch.save(vae.state_dict(), f'vae_{args.latent_dim}.pth')
+torch.save(vae.state_dict(), f'vae_latent{args.latent_dim}_beta{args.beta}_{vae.get_min_max()[0]}_{vae.get_min_max()[1]}.pth')

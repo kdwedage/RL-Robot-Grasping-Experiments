@@ -7,7 +7,7 @@ import argparse
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--seed', type=int, default=1234, help='Random seed for reproducibility')
-argparser.add_argument('--latent_dim', type=int, default=20, help='Dimensionality of the latent space')
+argparser.add_argument('--latent_dim', type=int, default=10, help='Dimensionality of the latent space')
 args = argparser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -63,7 +63,7 @@ class VAE(nn.Module):
 vae = VAE(latent_dim=args.latent_dim)
 
 # Load the trained model state from the saved file
-vae.load_state_dict(torch.load('vae.pth'))  # Replace 'vae.pth' with the path to your saved model file
+vae.load_state_dict(torch.load('vae_10.pth'))  # Replace 'vae.pth' with the path to your saved model file
 
 # Set the model to evaluation mode
 vae.eval()
