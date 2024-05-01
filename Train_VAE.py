@@ -109,8 +109,8 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 vae = VAE(latent_dim=latent_dim).to(device)
 
 
-# Assuming your numpy array is named 'numpy_data'
-numpy_data = np.load('observations.npy')  # Replace 'path_to_your_numpy_array.npy' with the path to your numpy array
+
+numpy_data = np.load('observations.npy') 
 dataset = NumpyArrayDataset(numpy_data, transform=transform)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
